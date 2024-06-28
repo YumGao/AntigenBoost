@@ -15,7 +15,9 @@ Install the required libraries using the following command:
 
 ```bash
 pip install -r requirements.txt
+```
 
 
-
-## Usage
+Usage
+Running the Script
+To run the script, use the following command:
