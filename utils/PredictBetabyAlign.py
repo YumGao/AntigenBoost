@@ -1,4 +1,6 @@
-from Bio.PDB import DSSP, PDBParser, PDBIO, Select
+from pathlib import Path
+
+from Bio.PDB import DSSP, MMCIFParser, PDBParser, PDBIO, Select
 from Bio.SeqUtils import seq1
 from Bio import pairwise2
 from Bio.Align import substitution_matrices
@@ -17,11 +19,20 @@ class AtomSelect(Select):
             return False
 
 def clean_pdb(input_pdb, output_pdb):
-    # Create PDB parser
-    parser = PDBParser()
+    input_path = Path(input_pdb)
+    suffix = input_path.suffix.lower()
+    if suffix == ".pdb":
+        parser = PDBParser(QUIET=True)
+    elif suffix in {".cif", ".mmcif"}:
+        parser = MMCIFParser(QUIET=True)
+    else:
+        raise ValueError(
+            f"Unsupported structure format: {suffix}. "
+            "Supported formats: .pdb, .cif, .mmcif"
+        )
 
     # Parse the PDB file
-    structure = parser.get_structure("pdb_structure", input_pdb)
+    structure = parser.get_structure("structure_model", str(input_path))
 
     # Define a new structure for selected atoms
     io = PDBIO()
@@ -182,30 +193,27 @@ def find_beta_strand_residues(ref_seq, tar_seq, ref_resid, ref_beta_id, aligned_
 def predict_beta_tarseq(tar_seq,ref_pdb,chain_id):
     
     
-#obtain the reference residue id of residues located on betastrand
-    ref_beta_id = print_beta_strand_residues(ref_pdb,chain_id)
-    print(f"Found {len(ref_beta_id)} residues located on beta strand.\n")#,ref_beta_id)
-
 # remove small molecules
-    cleaned_pdb = ref_pdb.replace(".pdb","_cleaned.pdb")
+    structure_path = Path(ref_pdb)
+    cleaned_pdb = str(structure_path.with_name(f"{structure_path.stem}_cleaned.pdb"))
     clean_pdb(ref_pdb, cleaned_pdb)
     print("Save cleaned reference pdb structure into:", cleaned_pdb)
 
+# obtain the reference residue id of residues located on beta strand
+    ref_beta_id = print_beta_strand_residues(cleaned_pdb, chain_id)
+    print(f"Found {len(ref_beta_id)} residues located on beta strand.\n")
+
 # obtain reference sequence data and residue id
-    ref_resid = obtain_residues_from_PDB(cleaned_pdb,chain_id)
-    ref_seq_full = obtain_full_sequence_from_PDB(ref_pdb)
-    ref_seq, ref_resid = obtain_residues_from_PDB(cleaned_pdb,chain_id)
+    ref_seq, ref_resid = obtain_residues_from_PDB(cleaned_pdb, chain_id)
     print(f"ref_seq:\n{ref_seq}")
     #print(f"ref_residue_id:\n{ref_resid}")
 
 
 
-#sequence alignment for ref_seq and tar_seq
-    best_alignment,identity_score, similarity_score =  align_sequences(tar_seq, ref_seq_full)
-    print("Pair-wise alignment with BLOSUM62:")
-    print("Identity:",identity_score)
-    print("Similarity:",similarity_score)
-    best_alignment,identity_score, similarity_score =  align_sequences(tar_seq, ref_seq)
+# sequence alignment for ref_seq and tar_seq (use only the selected chain)
+    best_alignment, identity_score, _ = align_sequences(tar_seq, ref_seq)
+    #print("Pair-wise alignment with BLOSUM62:")
+    #print("Identity:", identity_score)
     aligned_tar_seq, aligned_ref_seq, score, start, end = best_alignment
     
 # Print the alignment
